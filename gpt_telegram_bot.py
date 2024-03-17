@@ -29,8 +29,6 @@ class TelegramBot:
             messages=self.chat_history
         )
         self.chat_history.append(response.choices[0].message)
-        for entry in self.chat_history:
-            print(entry)
         return response
 
     def imagine_gpt(self, update: Update):
@@ -55,7 +53,6 @@ class TelegramBot:
         if str(update.message.from_user.username) != self.whitelist:
             return
         parameter = ' '.join(update.message.text.split()[1:])
-        print(parameter)
         if len(parameter) > 0:
             self.chat_history = [{"role": "system", "content": parameter}]
         else:
@@ -63,14 +60,12 @@ class TelegramBot:
         await context.bot.send_message(chat_id=update.effective_chat.id, text="New chat with ChatGPT started.")
 
     async def generate_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        print(update)
         if str(update.message.from_user.username) != self.whitelist:
             return
         image_url = self.imagine_gpt(update)
         await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url)
 
     async def unknown(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        print(update)
         if str(update.message.from_user.username) != self.whitelist:
             return
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
