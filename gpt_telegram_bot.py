@@ -46,13 +46,13 @@ class TelegramBot:
         return image_url
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if str(update.message.from_user.username) != self.whitelist:
+        if not str(update.message.from_user.username) in self.whitelist:
             return
         response = self.ask_gpt(update)
         await context.bot.send_message(chat_id=update.effective_chat.id,  parse_mode='Markdown', text=response.choices[0].message.content)
 
     async def new_brief_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if str(update.message.from_user.username) != self.whitelist:
+        if not str(update.message.from_user.username) in self.whitelist:
             return
         parameter = ' '.join(update.message.text.split()[1:])
         if len(parameter) > 0:
@@ -62,7 +62,7 @@ class TelegramBot:
         await context.bot.send_message(chat_id=update.effective_chat.id, text="New chat with ChatGPT started. Answers will be very brief")
 
     async def new_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if str(update.message.from_user.username) != self.whitelist:
+        if not str(update.message.from_user.username) in self.whitelist:
             return
         parameter = ' '.join(update.message.text.split()[1:])
         if len(parameter) > 0:
@@ -72,13 +72,13 @@ class TelegramBot:
         await context.bot.send_message(chat_id=update.effective_chat.id, text="New chat with ChatGPT started.")
 
     async def generate_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if str(update.message.from_user.username) != self.whitelist:
+        if not str(update.message.from_user.username) in self.whitelist:
             return
         image_url = self.imagine_gpt(update)
         await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url)
 
     async def display_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if str(update.message.from_user.username) != self.whitelist:
+        if not str(update.message.from_user.username) in self.whitelist:
             return
         await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown',
                                        text="/new - Starts a new chat. You can pass the \"system\" message separated by space. Example:\n```\n/new add \"Bazinga\" at the end of every reply.```\n\n" +
@@ -86,7 +86,7 @@ class TelegramBot:
                                        "/img - Ask Dall-E to generate an image with provided description. Example:\n```\n/img Draw me an iPhone but it's made of sticks and stones.```")
 
     async def unknown(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if str(update.message.from_user.username) != self.whitelist:
+        if not str(update.message.from_user.username) in self.whitelist:
             return
         await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
@@ -95,5 +95,5 @@ class TelegramBot:
 
 
 if __name__ =='__main__':
-    bot = TelegramBot(token=os.getenv('TOKEN'), whitelist=os.getenv('ENV_TELEGRAM_WHITELIST'), bot_name=os.getenv('ENV_TELEGRAM_BOT_NAME'))
+    bot = TelegramBot(token=os.getenv('TOKEN'), whitelist=os.getenv('ENV_TELEGRAM_WHITELIST').split(','), bot_name=os.getenv('ENV_TELEGRAM_BOT_NAME'))
     bot.run()
