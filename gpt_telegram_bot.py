@@ -3,8 +3,74 @@ from dotenv import load_dotenv
 from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import Application, filters, MessageHandler, ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler
 from openai import OpenAI
+import sqlite3
 
 load_dotenv()
+statistics_db = "user_statistics.db"
+
+
+def initialize_database(database_name: str):
+    connection = sqlite3.connect(database_name)
+    cursor = connection.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS statistics (
+                      user_name TEXT PRIMARY KEY,
+                      input_token_count INTEGER,
+                      output_token_count INTEGER,
+                      images_generated INTEGER)
+                   ''')
+    connection.commit()
+    connection.close()
+
+
+def get_statistics(user_name: str, database_name: str):
+    connection = sqlite3.connect(database_name)
+    cursor = connection.cursor()
+    input_token_count = 0
+    output_token_count = 0
+    images_generated = 0
+
+    cursor.execute('SELECT input_token_count FROM statistics WHERE user_name = ?', (user_name,))
+    result = cursor.fetchone()
+    if result:
+        input_token_count = result[0]
+
+    cursor.execute('SELECT output_token_count FROM statistics WHERE user_name = ?', (user_name,))
+    result = cursor.fetchone()
+    if result:
+        output_token_count = result[0]
+
+    cursor.execute('SELECT images_generated FROM statistics WHERE user_name = ?', (user_name,))
+    result = cursor.fetchone()
+    if result:
+        images_generated = result[0]
+
+    connection.close()
+    return [input_token_count, output_token_count, images_generated]
+
+
+def update_token_count(user_name: str, input_token_count, output_token_count, images_generated, database_name: str):
+    connection = sqlite3.connect(database_name)
+    cursor = connection.cursor()
+    cursor.execute("SELECT input_token_count, output_token_count, images_generated FROM statistics WHERE user_name=?", (user_name,))
+    result = cursor.fetchone()
+    if result:
+        new_val1 = result[0] + input_token_count
+        new_val2 = result[1] + output_token_count
+        new_val3 = result[2] + images_generated
+        cursor.execute('''
+                    UPDATE statistics
+                    SET input_token_count=?, output_token_count=?, images_generated=?
+                    WHERE user_name=?
+                ''', (new_val1, new_val2, new_val3, user_name))
+    else:
+        cursor.execute('''
+                    INSERT INTO statistics (user_name, input_token_count, output_token_count, images_generated)
+                    VALUES (?, ?, ?, ?)
+                ''', (user_name, input_token_count, output_token_count, images_generated))
+
+    connection.commit()
+    connection.close()
+
 
 class TelegramBot:
     def __init__(self, token, whitelist, bot_name):
@@ -20,6 +86,7 @@ class TelegramBot:
         self.application.add_handler(CommandHandler('n', self.new_brief_chat))
         self.application.add_handler(CommandHandler('img', self.generate_image))
         self.application.add_handler(CommandHandler('help', self.display_help))
+        self.application.add_handler(CommandHandler('usage', self.get_usage_stat))
         self.application.add_handler(MessageHandler(filters.COMMAND, self.unknown))
         self.chat_history = []
         self.gpt_client = OpenAI()
@@ -49,7 +116,14 @@ class TelegramBot:
         if not str(update.message.from_user.username) in self.whitelist:
             return
         response = self.ask_gpt(update)
-        await context.bot.send_message(chat_id=update.effective_chat.id,  parse_mode='Markdown', text=response.choices[0].message.content)
+        update_token_count(str(update.message.from_user.username), response.usage.prompt_tokens, response.usage.completion_tokens, 0, statistics_db)
+        await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown', text=response.choices[0].message.content)
+
+    async def get_usage_stat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not str(update.message.from_user.username) in self.whitelist:
+            return
+        token_count = get_statistics(str(update.message.from_user.username), statistics_db)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Your total input, output token count and images generated are: " + str(token_count[0]) + "/" + str(token_count[1]) + "/" + str(token_count[2]) + " respectively")
 
     async def new_brief_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not str(update.message.from_user.username) in self.whitelist:
@@ -75,6 +149,7 @@ class TelegramBot:
         if not str(update.message.from_user.username) in self.whitelist:
             return
         image_url = self.imagine_gpt(update)
+        update_token_count(str(update.message.from_user.username), 0, 0, 1, statistics_db)
         await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url)
 
     async def display_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -82,8 +157,8 @@ class TelegramBot:
             return
         await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown',
                                        text="/new - Starts a new chat. You can pass the \"system\" message separated by space. Example:\n```\n/new add \"Bazinga\" at the end of every reply.```\n\n" +
-                                       "/n  - Starts a new chat, but the \"system\" message predefined as \"You should be extra brief.\"\n\n" +
-                                       "/img - Ask Dall-E to generate an image with provided description. Example:\n```\n/img Draw me an iPhone but it's made of sticks and stones.```")
+                                            "/n  - Starts a new chat, but the \"system\" message predefined as \"You should be extra brief.\"\n\n" +
+                                            "/img - Ask Dall-E to generate an image with provided description. Example:\n```\n/img Draw me an iPhone but it's made of sticks and stones.```")
 
     async def unknown(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not str(update.message.from_user.username) in self.whitelist:
@@ -94,6 +169,8 @@ class TelegramBot:
         self.application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
-if __name__ =='__main__':
-    bot = TelegramBot(token=os.getenv('TOKEN'), whitelist=os.getenv('ENV_TELEGRAM_WHITELIST').split(','), bot_name=os.getenv('ENV_TELEGRAM_BOT_NAME'))
+if __name__ == '__main__':
+    initialize_database(statistics_db)
+    bot = TelegramBot(token=os.getenv('TOKEN'), whitelist=os.getenv('ENV_TELEGRAM_WHITELIST').split(','),
+                      bot_name=os.getenv('ENV_TELEGRAM_BOT_NAME'))
     bot.run()
