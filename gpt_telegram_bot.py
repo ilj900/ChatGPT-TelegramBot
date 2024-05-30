@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import Application, filters, MessageHandler, ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler
 from openai import OpenAI
 
@@ -17,11 +17,13 @@ class TelegramBot:
         self.application = ApplicationBuilder().token(os.getenv('TOKEN')).build()
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         self.application.add_handler(CommandHandler('new', self.new_chat))
+        self.application.add_handler(CommandHandler('n', self.new_brief_chat))
         self.application.add_handler(CommandHandler('img', self.generate_image))
+        self.application.add_handler(CommandHandler('help', self.display_help))
         self.application.add_handler(MessageHandler(filters.COMMAND, self.unknown))
         self.chat_history = []
         self.gpt_client = OpenAI()
-     
+
     def ask_gpt(self, update: Update):
         self.chat_history.append({"role": "user", "content": update.message.text})
         response = self.gpt_client.chat.completions.create(
@@ -49,6 +51,16 @@ class TelegramBot:
         response = self.ask_gpt(update)
         await context.bot.send_message(chat_id=update.effective_chat.id,  parse_mode='Markdown', text=response.choices[0].message.content)
 
+    async def new_brief_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if str(update.message.from_user.username) != self.whitelist:
+            return
+        parameter = ' '.join(update.message.text.split()[1:])
+        if len(parameter) > 0:
+            self.chat_history = [{"role": "system", "content": "You should be extra brief."}]
+        else:
+            self.chat_history = []
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="New chat with ChatGPT started. Answers will be very brief")
+
     async def new_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(update.message.from_user.username) != self.whitelist:
             return
@@ -64,6 +76,14 @@ class TelegramBot:
             return
         image_url = self.imagine_gpt(update)
         await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url)
+
+    async def display_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if str(update.message.from_user.username) != self.whitelist:
+            return
+        await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown',
+                                       text="/new - Starts a new chat. You can pass the \"system\" message separated by space. Example:\n```\n/new add \"Bazinga\" at the end of every reply.```\n\n" +
+                                       "/n  - Starts a new chat, but the \"system\" message predefined as \"You should be extra brief.\"\n\n" +
+                                       "/img - Ask Dall-E to generate an image with provided description. Example:\n```\n/img Draw me an iPhone but it's made of sticks and stones.```")
 
     async def unknown(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if str(update.message.from_user.username) != self.whitelist:
