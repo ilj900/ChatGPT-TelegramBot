@@ -72,6 +72,120 @@ def update_token_count(user_name: str, input_token_count, output_token_count, im
     connection.close()
 
 
+def split_into_blocks(text: str):
+    result = []
+    in_block_of_code = False
+    current_sentence = ''
+
+    i = 0
+    while i < len(text):
+        if text[i:i+3] == "```":
+            if in_block_of_code:
+                if current_sentence != '':
+                    result.append('```' + current_sentence + '```')
+            else:
+                if current_sentence != '':
+                    result.append(current_sentence.lstrip().rstrip())
+            current_sentence = ''
+            in_block_of_code = not in_block_of_code
+            i += 2
+        else:
+            current_sentence += text[i]
+        i += 1
+
+    return result
+
+
+def split_code_block(text: str):
+    if len(text) <= 4096:
+        return text
+
+    code_itself = text.lstrip('```').rstrip('```')
+
+    parts = []
+    current_part = str()
+    current_length = 0
+
+    for line in code_itself.splitlines(keepends=True):
+        line_length = len(line)
+
+        if current_length + line_length <= 4090:
+            current_part += line
+            current_length += line_length
+        else:
+            if current_length > 0:
+                parts.append('```' + current_part + '```')
+
+            current_part = line
+            current_length = line_length
+
+            while current_length > 4090:
+                part = ''.join(current_part)[:4090]
+                parts.append('```' + part + '```')
+                current_part = [line[4090:]]
+                current_length = len(current_part[0])
+
+    if current_part:
+        parts.append('```' + current_part + '```')
+
+    return parts
+
+
+def split_text_block(text: str):
+    if len(text) <= 4096:
+        return text
+
+    parts = []
+    current_part = str()
+    current_length = 0
+
+    for line in text.splitlines(keepends=True):
+        line_length = len(line)
+
+        if current_length + line_length <= 4096:
+            current_part += line_length
+            current_length += line_length
+        else:
+            if current_length > 0:
+                parts.append(current_part)
+
+            current_part = [line]
+            current_length = line_length
+
+            while current_length > 4096:
+                part = ''.join(current_part)[:4096]
+                parts.append(part)
+                current_part = [line[4096:]]
+                current_length = len(current_part[0])
+
+    if current_part:
+        parts.append(current_part)
+
+    return parts
+
+
+def split_long_message(long_message: str):
+    if len(long_message) <= 4096:
+        return long_message
+
+    strings_1 = split_into_blocks(long_message)
+    # If message is ill-formatted, then just split it into 4096 chunks
+    if len(strings_1) % 2 != 1:
+        result = []
+        for i in range(0, len(long_message), 4096):
+            result.append(long_message[i:i + 4096])
+        return result
+
+    strings_2 = []
+    for string in strings_1:
+        if string.startswith('```') and string.endswith('```'):
+            strings_2.append(split_code_block(string))
+        else:
+            strings_2.append(split_text_block(string))
+
+    return strings_2
+
+
 class TelegramBot:
     def __init__(self, token, whitelist, bot_name):
         self.whitelist = whitelist
@@ -87,6 +201,7 @@ class TelegramBot:
         self.application.add_handler(CommandHandler('img', self.generate_image))
         self.application.add_handler(CommandHandler('help', self.display_help))
         self.application.add_handler(CommandHandler('usage', self.get_usage_stat))
+        self.application.add_handler(CommandHandler('test', self.test))
         self.application.add_handler(MessageHandler(filters.COMMAND, self.unknown))
         self.chat_history = []
         self.gpt_client = OpenAI()
@@ -111,6 +226,21 @@ class TelegramBot:
 
         image_url = response.data[0].url
         return image_url
+
+    async def test(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not str(update.message.from_user.username) in self.whitelist:
+            return
+
+        test_message = str()
+        with open('test.txt') as file:
+            line = file.readline()
+            while line:
+                test_message += line
+                line = file.readline()
+
+        messages = split_long_message(test_message)
+        for message in messages[:-1]:
+            await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown', text=message)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not str(update.message.from_user.username) in self.whitelist:
@@ -170,6 +300,14 @@ class TelegramBot:
 
 
 if __name__ == '__main__':
+    test_message = str()
+    with open('test.txt') as file:
+        line = file.readline()
+        while line:
+            test_message += line
+            line = file.readline()
+
+    messages = split_long_message(test_message)
     initialize_database(statistics_db)
     bot = TelegramBot(token=os.getenv('TOKEN'), whitelist=os.getenv('ENV_TELEGRAM_WHITELIST').split(','),
                       bot_name=os.getenv('ENV_TELEGRAM_BOT_NAME'))
