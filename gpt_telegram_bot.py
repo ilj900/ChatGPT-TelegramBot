@@ -96,9 +96,9 @@ def split_into_blocks(text: str):
     return result
 
 
-def split_code_block(text: str):
+def split_code_block(text: str) -> list[str]:
     if len(text) <= 4096:
-        return text
+        return [text]
 
     code_itself = text.lstrip('```').rstrip('```')
 
@@ -127,13 +127,12 @@ def split_code_block(text: str):
 
     if current_part:
         parts.append('```' + current_part + '```')
-
     return parts
 
 
-def split_text_block(text: str):
+def split_text_block(text: str) -> list[str]:
     if len(text) <= 4096:
-        return text
+        return [text]
 
     parts = []
     current_part = str()
@@ -179,9 +178,9 @@ def split_long_message(long_message: str):
     strings_2 = []
     for string in strings_1:
         if string.startswith('```') and string.endswith('```'):
-            strings_2.append(split_code_block(string))
+            strings_2.extend(split_code_block(string))
         else:
-            strings_2.append(split_text_block(string))
+            strings_2.extend(split_text_block(string))
 
     return strings_2
 
@@ -190,7 +189,7 @@ class TelegramBot:
     def __init__(self, token, whitelist, bot_name):
         self.whitelist = whitelist
         self.bot_name = bot_name
-        self.MODEL_NAME = "gpt-4-turbo-preview"
+        self.MODEL_NAME = "gpt-4o"
         self.DALLE_VERSION = "dall-e-3"
         self.DALLE_RESOLUTION = "1024x1024"
         self.IMAGE_QUALITY = "hd"
@@ -239,7 +238,7 @@ class TelegramBot:
                 line = file.readline()
 
         messages = split_long_message(test_message)
-        for message in messages[:-1]:
+        for message in messages:
             await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown', text=message)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -300,14 +299,6 @@ class TelegramBot:
 
 
 if __name__ == '__main__':
-    test_message = str()
-    with open('test.txt') as file:
-        line = file.readline()
-        while line:
-            test_message += line
-            line = file.readline()
-
-    messages = split_long_message(test_message)
     initialize_database(statistics_db)
     bot = TelegramBot(token=os.getenv('TOKEN'), whitelist=os.getenv('ENV_TELEGRAM_WHITELIST').split(','),
                       bot_name=os.getenv('ENV_TELEGRAM_BOT_NAME'))
