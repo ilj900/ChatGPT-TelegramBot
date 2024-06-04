@@ -317,7 +317,7 @@ class TelegramBot:
                 statistics = get_statistics(user_name, statistics_db)
                 debit = get_debit(statistics[0], statistics[1], statistics[2])
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=(user_name + "'s total input, output token count and images generated are:\n" + str(statistics[0]) + "/" + str(statistics[1]) + "/" + str(statistics[2]) + "\n"
-                                                                                       + user_name + "'s current remaining is " + str(statistics[3] - debit) + "€"))
+                                                                                       + user_name + "'s current remaining balance is " + str(statistics[3] - debit) + "€"))
                 return
 
             await context.bot.send_message(chat_id=update.effective_chat.id, text="User: " + user_name + " was not found.")
