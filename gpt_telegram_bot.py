@@ -298,7 +298,9 @@ class TelegramBot:
 
         response = self.ask_gpt(update)
         update_token_count(str(update.message.from_user.username), response.usage.prompt_tokens, response.usage.completion_tokens, 0, statistics_db)
-        await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown', text=response.choices[0].message.content)
+        messages = split_long_message(response.choices[0].message.content)
+        for message in messages:
+            await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown', text=message)
 
     async def get_usage_stat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not str(update.message.from_user.username) in self.whitelist:
