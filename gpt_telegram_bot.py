@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import Application, filters, MessageHandler, ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler
 from openai import OpenAI
+from typing import List
 import sqlite3
 
 load_dotenv()
@@ -151,7 +152,7 @@ def split_into_blocks(text: str):
 
 
 # Function to split a block of code into a smaller one (not greater than 4096)
-def split_code_block(text: str) -> list[str]:
+def split_code_block(text: str) -> List[str]:
     if len(text) <= 4096:
         return [text]
 
@@ -184,8 +185,9 @@ def split_code_block(text: str) -> list[str]:
         parts.append('```' + current_part + '```')
     return parts
 
+
 # Function to split a block of text into a smaller one (not greater than 4096)
-def split_text_block(text: str) -> list[str]:
+def split_text_block(text: str) -> List[str]:
     if len(text) <= 4096:
         return [text]
 
@@ -221,7 +223,7 @@ def split_text_block(text: str) -> list[str]:
 # Split long message into smaller messages, suitable for sending as a single message
 def split_long_message(long_message: str):
     if len(long_message) <= 4096:
-        return long_message
+        return [long_message]
 
     strings_1 = split_into_blocks(long_message)
 
