@@ -7,9 +7,9 @@ import sqlite3
 
 load_dotenv()
 statistics_db = "user_statistics.db"
-input_price_per_token = 0.0005
-output_price_per_token = 0.0015
-price_per_image = 0.08
+input_price_per_token = 0.000005
+output_price_per_token = 0.000015
+price_per_image = 0.0008
 
 
 # A function to initialize a SQL database in case if it's not created
