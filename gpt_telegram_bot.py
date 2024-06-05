@@ -131,6 +131,8 @@ def split_into_blocks(text: str):
             current_sentence = ''
             in_block_of_code = not in_block_of_code
             i += 2
+            if (i+1) < (len(text) - 1) and text[i+1] == '\n':
+                i += 1
         else:
             current_sentence += text[i]
         i += 1
@@ -184,13 +186,13 @@ def split_text_block(text: str) -> list[str]:
         line_length = len(line)
 
         if current_length + line_length <= 4096:
-            current_part += line_length
+            current_part += line
             current_length += line_length
         else:
             if current_length > 0:
                 parts.append(current_part)
 
-            current_part = [line]
+            current_part = line
             current_length = line_length
 
             while current_length > 4096:
@@ -210,12 +212,6 @@ def split_long_message(long_message: str):
         return long_message
 
     strings_1 = split_into_blocks(long_message)
-    # If message is ill-formatted, then just split it into 4096 chunks
-    if len(strings_1) % 2 != 1:
-        result = []
-        for i in range(0, len(long_message), 4096):
-            result.append(long_message[i:i + 4096])
-        return result
 
     strings_2 = []
     for string in strings_1:
@@ -238,6 +234,7 @@ class TelegramBot:
         self.IMAGE_QUALITY = "hd"
         self.application = ApplicationBuilder().token(os.getenv('TOKEN')).build()
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        self.application.add_handler(CommandHandler('start', self.start))
         self.application.add_handler(CommandHandler('new', self.new_chat))
         self.application.add_handler(CommandHandler('n', self.new_brief_chat))
         self.application.add_handler(CommandHandler('img', self.generate_image))
@@ -268,6 +265,14 @@ class TelegramBot:
 
         image_url = response.data[0].url
         return image_url
+
+
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not str(update.message.from_user.username) in self.whitelist:
+            return
+
+        message = 'Hello, I\'m ChatGPT Telegram bot.\n `\\new` to start a new chat.\n`\\help` to see what I can.\nGood luck, have fun.'
+        await context.bot.send_message(chat_id=update.effective_chat.id, parse_mode='Markdown', text=message)
 
 
     async def process_payment(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
